@@ -8,7 +8,7 @@
 using namespace std;
 
 const int ROWS = 50;
-const int COLS = 100;
+const int COLS = 50;
 const string RED = "\033[31m";
 const string RESET = "\033[0m";
 
@@ -384,8 +384,8 @@ double calculateY(double x, int choice) {
 int main() {
     string expression;
     double y;
-    double y_scale = 2;
-    double x_scale = 2;
+    double yScale = 2.0;
+    double xScale = 4.0;
 
     char screen[ROWS][COLS];
     bool isGraph[ROWS][COLS] = {};
@@ -410,7 +410,9 @@ int main() {
     int previousCol = 0;
 
     for (int col = 0; col < COLS; col++) {
-        double x = (col - COLS / 2.0) / x_scale;
+
+        double x = (col - COLS / 2.0) / xScale;
+        double y;
 
         try {
             y = evaluateExpression(expression, x);
@@ -426,28 +428,33 @@ int main() {
         }
 
         int row = static_cast<int>(
-            std::round(ROWS / 2.0 - y * y_scale)
+            std::round(ROWS / 2.0 - y * yScale)
         );
 
+        // Ignore points outside the screen.
         if (row < 0 || row >= ROWS) {
             previousValid = false;
             continue;
         }
 
-        if (previousValid &&
-            std::abs(row - previousRow) < ROWS / 4) {
-            drawLine(screen, isGraph, previousRow, previousCol, row, col);
+        if (previousValid) {
+            int startRow = std::min(previousRow, row);
+            int endRow = std::max(previousRow, row);
+
+            // Fill the vertical gap in this column.
+            for (int r = startRow; r <= endRow; r++) {
+                screen[r][col] = '#';
+                isGraph[r][col] = true;
+            }
         }
         else {
-            screen[row][col] = '_';
+            screen[row][col] = '#';
+            isGraph[row][col] = true;
         }
 
         previousRow = row;
-        previousCol = col;
-        previousValid = true;       
-
+        previousValid = true;
     }
-
     for (int i = 0; i < ROWS; i++) {
         for (int j = 0; j < COLS; j++) {
             if (isGraph[i][j]) {
