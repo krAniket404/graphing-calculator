@@ -7,19 +7,24 @@
 #include <stdexcept>
 #include <string>
 
+// Mathematical constant
 const double PI = 3.14159265358979323846;
 
+// ANSI escape codes for red graph points
 const char* RED = "\033[31m";
 const char* RESET = "\033[0m";
 
-// Helper function: check whether a screen coordinate is valid.
+// HELPER FUNCTIONS
+
+// Check whether a screen coordinate is valid.
 bool isInsideScreen(int row, int col) {
     return row >= 0 && row < ROWS &&
-            col >= 0 && col < COLS;
+           col >= 0 && col < COLS;
 }
 
-// Helper function: convert a mathematical y-coordinate to a screen row.
-bool toScreenRow(double y, double yScale, int centerRow, int& row) {
+// Convert a mathematical y-coordinate into a screen row.
+bool toScreenRow(double y, double yScale,
+                 int centerRow, int& row) {
     double rowValue = centerRow - y * yScale;
 
     if (!std::isfinite(rowValue) ||
@@ -32,14 +37,17 @@ bool toScreenRow(double y, double yScale, int centerRow, int& row) {
     return row >= 0 && row < ROWS;
 }
 
-// EXPRESSIONPARSER IMPLEMENTATION
+// EXPRESSION IMPLEMENTATION
 
-ExpressionParser::ExpressionParser(const std::string& text, double x) {
+ExpressionParser::ExpressionParser(
+    const std::string& text, double x) {
+
     expression = text;
     pos = 0;
     xValue = x;
 }
 
+// Skip whitespace between tokens.
 void ExpressionParser::skipSpaces() {
     while (pos < expression.size() &&
            std::isspace(
@@ -48,6 +56,7 @@ void ExpressionParser::skipSpaces() {
     }
 }
 
+// Match and consume a character if it is present.
 bool ExpressionParser::match(char c) {
     skipSpaces();
 
@@ -58,6 +67,8 @@ bool ExpressionParser::match(char c) {
 
     return false;
 }
+
+// PARSE EXPRESSIONS
 
 double ExpressionParser::parseExpression() {
     double value = parseTerm();
@@ -74,17 +85,28 @@ double ExpressionParser::parseExpression() {
         }
 
         if (!std::isfinite(value)) {
-            throw std::runtime_error("Mathematical result is out of range");
+            throw std::runtime_error(
+                "Mathematical result is out of range");
         }
     }
 
     return value;
 }
 
+// PARSE TERM
+
 double ExpressionParser::parseTerm() {
     double value = parseUnary();
 
     while (true) {
+        skipSpaces();
+
+        if (pos + 1 < expression.size() &&
+            expression[pos] == '*' &&
+            expression[pos + 1] == '*') {
+            break;
+        }
+
         if (match('*')) {
             value *= parseUnary();
         }
@@ -107,16 +129,39 @@ double ExpressionParser::parseTerm() {
             value = std::fmod(value, divisor);
         }
         else {
-            break;
+
+            skipSpaces();
+
+            if (pos >= expression.size()) {
+                break;
+            }
+
+            char c = expression[pos];
+
+            bool beginsPrimary =
+                c == '(' ||
+                c == '.' ||
+                std::isdigit(static_cast<unsigned char>(c)) ||
+                std::isalpha(static_cast<unsigned char>(c));
+
+            if (beginsPrimary) {
+                value *= parseUnary();
+            }
+            else {
+                break;
+            }
         }
 
         if (!std::isfinite(value)) {
-            throw std::runtime_error("Mathematical result is out of range");
+            throw std::runtime_error(
+                "Mathematical result is out of range");
         }
     }
 
     return value;
 }
+
+// PARSE UNARY
 
 double ExpressionParser::parseUnary() {
     if (match('+')) {
@@ -130,22 +175,50 @@ double ExpressionParser::parseUnary() {
     return parsePower();
 }
 
+// PARSE POWER
+
 double ExpressionParser::parsePower() {
     double base = parsePrimary();
 
-    if (match('^')) {
+    skipSpaces();
+
+    bool hasExponent = false;
+
+    // Standard exponentiation: ^
+    if (pos < expression.size() &&
+        expression[pos] == '^') {
+
+        ++pos;
+        hasExponent = true;
+    }
+
+    // Alternative exponentiation: **
+    else if (pos + 1 < expression.size() &&
+             expression[pos] == '*' &&
+             expression[pos + 1] == '*') {
+
+        pos += 2;
+        hasExponent = true;
+    }
+
+    if (hasExponent) {
+        // Parsing the exponent through parseUnary() allows
+        // negative exponents and right-associative powers.
         double exponent = parseUnary();
+
         base = std::pow(base, exponent);
 
         if (!std::isfinite(base)) {
-            throw std::runtime_error("Invalid exponentiation");
+            throw std::runtime_error(
+                "Invalid exponentiation");
         }
     }
 
     return base;
 }
 
-// Parse an identifier such as sin, sqrt, or log10.
+// PARSE NAME
+
 std::string ExpressionParser::parseName() {
     skipSpaces();
 
@@ -154,13 +227,16 @@ std::string ExpressionParser::parseName() {
     while (pos < expression.size() &&
            std::isalnum(
                static_cast<unsigned char>(expression[pos]))) {
+
         name += expression[pos++];
     }
 
     return name;
 }
 
-double ExpressionParser::parseFunction(const std::string& name) {
+double ExpressionParser::parseFunction(
+    const std::string& name) {
+
     if (!match('(')) {
         throw std::runtime_error(
             "Expected '(' after function name: " + name);
@@ -194,45 +270,74 @@ double ExpressionParser::parseFunction(const std::string& name) {
             "Missing closing parenthesis for " + name);
     }
 
-    if (name == "sin") return std::sin(a);
-    if (name == "cos") return std::cos(a);
-    if (name == "tan") return std::tan(a);
+    if (name == "sin") {
+        return std::sin(a);
+    }
+
+    if (name == "cos") {
+        return std::cos(a);
+    }
+
+    if (name == "tan") {
+        return std::tan(a);
+    }
 
     if (name == "asin") {
-        if (a < -1 || a > 1)
-            throw std::runtime_error("asin argument must be in [-1, 1]");
+        if (a < -1 || a > 1) {
+            throw std::runtime_error(
+                "asin argument must be in [-1, 1]");
+        }
+
         return std::asin(a);
     }
 
     if (name == "acos") {
-        if (a < -1 || a > 1)
-            throw std::runtime_error("acos argument must be in [-1, 1]");
+        if (a < -1 || a > 1) {
+            throw std::runtime_error(
+                "acos argument must be in [-1, 1]");
+        }
+
         return std::acos(a);
     }
 
-    if (name == "atan") return std::atan(a);
+    if (name == "atan") {
+        return std::atan(a);
+    }
 
     if (name == "ln") {
-        if (a <= 0)
-            throw std::runtime_error("ln requires a positive argument");
+        if (a <= 0) {
+            throw std::runtime_error(
+                "ln requires a positive argument");
+        }
+
         return std::log(a);
     }
 
     if (name == "log" || name == "log10") {
-        if (a <= 0)
-            throw std::runtime_error("log requires a positive argument");
+        if (a <= 0) {
+            throw std::runtime_error(
+                "log requires a positive argument");
+        }
+
         return std::log10(a);
     }
 
-    if (name == "exp") return std::exp(a);
+    if (name == "exp") {
+        return std::exp(a);
+    }
 
     if (name == "sqrt") {
-        if (a < 0)
-            throw std::runtime_error("sqrt requires a non-negative argument");
+        if (a < 0) {
+            throw std::runtime_error(
+                "sqrt requires a non-negative argument");
+        }
+
         return std::sqrt(a);
     }
 
-    if (name == "abs") return std::abs(a);
+    if (name == "abs") {
+        return std::abs(a);
+    }
 
     throw std::runtime_error("Unknown function: " + name);
 }
@@ -241,64 +346,87 @@ double ExpressionParser::parsePrimary() {
     skipSpaces();
 
     if (pos >= expression.size()) {
-        throw std::runtime_error("Unexpected end of expression");
+        throw std::runtime_error(
+            "Unexpected end of expression");
     }
 
+    // Parenthesized expression.
     if (match('(')) {
         double value = parseExpression();
 
         if (!match(')')) {
-            throw std::runtime_error("Missing closing parenthesis");
+            throw std::runtime_error(
+                "Missing closing parenthesis");
         }
 
         return value;
     }
 
+    // Variable x.
     if (expression[pos] == 'x' &&
         (pos + 1 == expression.size() ||
          !std::isalnum(
              static_cast<unsigned char>(expression[pos + 1])))) {
+
         ++pos;
         return xValue;
     }
 
+    // Constant pi.
     if (expression.compare(pos, 2, "pi") == 0 &&
         (pos + 2 == expression.size() ||
          !std::isalnum(
              static_cast<unsigned char>(expression[pos + 2])))) {
+
         pos += 2;
         return PI;
     }
 
+    // Constant e.
     if (expression[pos] == 'e' &&
         (pos + 1 == expression.size() ||
          !std::isalnum(
              static_cast<unsigned char>(expression[pos + 1])))) {
+
         ++pos;
         return std::exp(1.0);
     }
 
+    // Function names.
     if (std::isalpha(
             static_cast<unsigned char>(expression[pos]))) {
+
         std::string name = parseName();
+
         return parseFunction(name);
     }
 
+    // Numeric literals.
     if (std::isdigit(
             static_cast<unsigned char>(expression[pos])) ||
         expression[pos] == '.') {
+
         std::size_t consumed = 0;
 
         double value = std::stod(
             expression.substr(pos), &consumed);
 
+        if (consumed == 0) {
+            throw std::runtime_error(
+                "Invalid numeric literal");
+        }
+
         pos += consumed;
+
         return value;
     }
 
     throw std::runtime_error(
-        std::string("Unexpected character: ") + expression[pos]);
+        std::string("Unexpected character: ") +
+        expression[pos]);
 }
+
+// EVALUATE EXPRESSION
 
 double ExpressionParser::evaluate() {
     double result = parseExpression();
@@ -317,13 +445,16 @@ double ExpressionParser::evaluate() {
     return result;
 }
 
-// FUNCTION OVERLOADS
+// Evaluate an expression for a particular x value.
+double evaluateExpression(
+    const std::string& expression, double x) {
 
-double evaluateExpression(const std::string& expression, double x) {
     ExpressionParser parser(expression, x);
+
     return parser.evaluate();
 }
 
+// Evaluate an expression using x = 0.
 double evaluateExpression(const std::string& expression) {
     return evaluateExpression(expression, 0.0);
 }
@@ -334,6 +465,7 @@ Graph::Graph() {
     initialize();
 }
 
+// Clear the graph screen and graph-point mask.
 void Graph::initialize() {
     for (int row = 0; row < ROWS; ++row) {
         for (int col = 0; col < COLS; ++col) {
@@ -343,6 +475,7 @@ void Graph::initialize() {
     }
 }
 
+// Draw the horizontal and vertical axes.
 void Graph::drawAxes() {
     int centerRow = ROWS / 2;
     int centerCol = COLS / 2;
@@ -358,6 +491,7 @@ void Graph::drawAxes() {
     screen[centerRow][centerCol] = '+';
 }
 
+// Place a graph point at the specified screen coordinate.
 void Graph::putGraphPoint(int row, int col) {
     if (!isInsideScreen(row, col)) {
         return;
@@ -367,27 +501,40 @@ void Graph::putGraphPoint(int row, int col) {
     isGraph[row][col] = true;
 }
 
-void Graph::plot(const std::string& function,
-                 double xScale, double yScale) {
+// Plot a function with custom scales.
+void Graph::plot(
+    const std::string& function,
+    double xScale,
+    double yScale) {
+
     plotGraph(function, *this, xScale, yScale);
 }
 
+// Plot a function with default scales.
 void Graph::plot(const std::string& function) {
-    plot(function, 4.0, 8.0);
+    plot(function, 2.0, 1.0);
 }
 
 // GRAPH PLOTTING HELPER
 
-void plotGraph(const std::string& expression,
-               Graph& graph,
-               double xScale,
-               double yScale) {
-    if (xScale <= 0 || yScale <= 0) {
-        throw std::invalid_argument("Scales must be positive");
+void plotGraph(
+    const std::string& expression,
+    Graph& graph,
+    double xScale,
+    double yScale) {
+
+    if (xScale <= 0 || yScale <= 0 ||
+        !std::isfinite(xScale) ||
+        !std::isfinite(yScale)) {
+
+        throw std::invalid_argument(
+            "Scales must be positive and finite");
     }
 
     graph.initialize();
+
     graph.expression = expression;
+
     graph.drawAxes();
 
     int centerRow = ROWS / 2;
@@ -397,21 +544,27 @@ void plotGraph(const std::string& expression,
     int previousRow = 0;
 
     for (int col = 0; col < COLS; ++col) {
+        // Convert the screen column into an x-coordinate.
         double x = (col - centerCol) / xScale;
+
         double y;
 
         try {
             y = evaluateExpression(expression, x);
         }
         catch (const std::exception&) {
+            // Invalid values break the connection between
+            // adjacent graph points.
             previousValid = false;
             continue;
         }
 
         int row = 0;
 
+        // Skip values that cannot be displayed on the screen.
         if (!std::isfinite(y) ||
             !toScreenRow(y, yScale, centerRow, row)) {
+
             previousValid = false;
             continue;
         }
@@ -420,7 +573,8 @@ void plotGraph(const std::string& expression,
             int startRow = std::min(previousRow, row);
             int endRow = std::max(previousRow, row);
 
-            // Do not connect large jumps across likely discontinuities.
+            // Avoid drawing long vertical lines across likely
+            // discontinuities, such as those in tan(x).
             if (endRow - startRow <= ROWS / 4) {
                 for (int r = startRow; r <= endRow; ++r) {
                     graph.putGraphPoint(r, col);
@@ -439,8 +593,12 @@ void plotGraph(const std::string& expression,
     }
 }
 
-void plotGraph(const std::string& expression, Graph& graph) {
-    plotGraph(expression, graph, 4.0, 8.0);
+// Plot using default scales.
+void plotGraph(
+    const std::string& expression,
+    Graph& graph) {
+
+    plotGraph(expression, graph, 2.0, 1.0);
 }
 
 std::istream& operator>>(std::istream& in, Graph& graph) {
@@ -457,7 +615,9 @@ std::ostream& operator<<(std::ostream& out, const Graph& graph) {
     for (int row = 0; row < ROWS; ++row) {
         for (int col = 0; col < COLS; ++col) {
             if (graph.isGraph[row][col]) {
-                out << RED << graph.screen[row][col] << RESET;
+                out << RED
+                    << graph.screen[row][col]
+                    << RESET;
             }
             else {
                 out << graph.screen[row][col];

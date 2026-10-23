@@ -4,8 +4,8 @@
 #include <iosfwd>
 #include <string>
 
-constexpr int ROWS = 41;
-constexpr int COLS = 101;
+constexpr int ROWS = 50;
+constexpr int COLS = 100;
 
 class ExpressionParser {
 private:
@@ -43,14 +43,15 @@ public:
 
     friend std::istream& operator>>(std::istream&, Graph&);
     friend std::ostream& operator<<(std::ostream&, const Graph&);
+
     void initialize();
     void drawAxes();
     void putGraphPoint(int, int);
+
     friend void plotGraph(const std::string&, Graph&, double, double);
 };
 
 void plotGraph(const std::string&, Graph&, double, double);
-
 void plotGraph(const std::string&, Graph&);
 
 double evaluateExpression(const std::string&);
